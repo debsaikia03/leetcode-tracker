@@ -1,0 +1,19 @@
+{
+  "name": "leetcode-tracker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mongoose": "^8.17.1",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2"
+  }
+}
