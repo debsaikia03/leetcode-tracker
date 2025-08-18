@@ -13,17 +13,11 @@ await mongoose.connect(process.env.MONGO_URI);
 
 const dailySchema = new mongoose.Schema({
   username: String,
-  date: { type: Date, default: Date.now }, // will normalize to midnight
+  fetchedAt: { type: Date, default: Date.now }, // timestamp when request was made
   problems: [String],
 });
 
 const DailyProblems = mongoose.model("DailyProblems", dailySchema);
-
-// Normalize a date to midnight (so day matches exactly)
-function normalizeDate(d) {
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 // Fetch recent accepted submissions
 async function fetchRecentAccepted(username) {
@@ -57,29 +51,31 @@ app.get("/fetch-now", async (req, res) => {
     const username = process.env.LEETCODE_USERNAME;
     const submissions = await fetchRecentAccepted(username);
 
-    // normalize today’s date
-    const today = normalizeDate(new Date());
+    const now = new Date();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000); // 24 hours back
 
-    // filter today's problems
-    const todayProblems = submissions.filter((s) => {
-      const solvedDate = normalizeDate(new Date(s.timestamp * 1000));
-      return solvedDate.getTime() === today.getTime();
+    // filter last 24 hrs
+    const last24hrs = submissions.filter((s) => {
+      const solvedDate = new Date(s.timestamp * 1000);
+      return solvedDate >= yesterday && solvedDate <= now;
     });
 
-    const uniqueNames = [...new Set(todayProblems.map((s) => s.title))];
+    const uniqueNames = [...new Set(last24hrs.map((s) => s.title))];
 
     if (uniqueNames.length > 0) {
-      const record = await DailyProblems.findOneAndUpdate(
-        { username, date: today }, // match doc for today
-        { $addToSet: { problems: { $each: uniqueNames } }, $setOnInsert: { date: today } },
-        { upsert: true, new: true }
-      );
+      const record = new DailyProblems({
+        username,
+        fetchedAt: now,
+        problems: uniqueNames,
+      });
 
-      console.log("✅ Updated daily problems:", record.problems);
-      res.json({ status: "saved", problems: record.problems });
+      await record.save();
+
+      console.log("✅ Stored last 24h problems:", uniqueNames);
+      res.json({ status: "saved", problems: uniqueNames, fetchedAt: now });
     } else {
-      console.log("ℹ️ No problems solved today.");
-      res.json({ status: "none", message: "No problems solved today." });
+      console.log("ℹ️ No problems solved in last 24h.");
+      res.json({ status: "none", message: "No problems solved in last 24h." });
     }
   } catch (err) {
     console.error("❌ Error fetching submissions:", err);
