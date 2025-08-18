@@ -6,18 +6,24 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const app = express(); // ✅ app must be declared before using
+const app = express();
 
 // MongoDB connection
 await mongoose.connect(process.env.MONGO_URI);
 
 const dailySchema = new mongoose.Schema({
   username: String,
-  date: { type: Date, default: Date.now },
+  date: { type: Date, default: Date.now }, // will normalize to midnight
   problems: [String],
 });
 
 const DailyProblems = mongoose.model("DailyProblems", dailySchema);
+
+// Normalize a date to midnight (so day matches exactly)
+function normalizeDate(d) {
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 // Fetch recent accepted submissions
 async function fetchRecentAccepted(username) {
@@ -51,26 +57,26 @@ app.get("/fetch-now", async (req, res) => {
     const username = process.env.LEETCODE_USERNAME;
     const submissions = await fetchRecentAccepted(username);
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // normalize today’s date
+    const today = normalizeDate(new Date());
 
+    // filter today's problems
     const todayProblems = submissions.filter((s) => {
-      const solvedDate = new Date(s.timestamp * 1000);
-      solvedDate.setHours(0, 0, 0, 0);
+      const solvedDate = normalizeDate(new Date(s.timestamp * 1000));
       return solvedDate.getTime() === today.getTime();
     });
 
     const uniqueNames = [...new Set(todayProblems.map((s) => s.title))];
 
     if (uniqueNames.length > 0) {
-      const record = new DailyProblems({
-        username,
-        date: today,
-        problems: uniqueNames,
-      });
-      await record.save();
-      console.log("✅ Stored daily problems:", uniqueNames);
-      res.json({ status: "saved", problems: uniqueNames });
+      const record = await DailyProblems.findOneAndUpdate(
+        { username, date: today }, // match doc for today
+        { $addToSet: { problems: { $each: uniqueNames } }, $setOnInsert: { date: today } },
+        { upsert: true, new: true }
+      );
+
+      console.log("✅ Updated daily problems:", record.problems);
+      res.json({ status: "saved", problems: record.problems });
     } else {
       console.log("ℹ️ No problems solved today.");
       res.json({ status: "none", message: "No problems solved today." });
