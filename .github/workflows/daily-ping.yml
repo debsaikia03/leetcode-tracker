@@ -1,6 +1,6 @@
 on:
   schedule:
-    - cron: "24 17 * * *"  # every day at 23:54 UTC
+    - cron: "20 18 * * *" # every day at 23:54 UTC
 jobs:
   ping:
     runs-on: ubuntu-latest
