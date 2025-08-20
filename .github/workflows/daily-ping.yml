@@ -1,0 +1,8 @@
+on:
+  schedule:
+    - cron: "24 17 * * *"  # every day at 23:54 UTC
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl https://leetcode-tracker-zcz5.onrender.com/
